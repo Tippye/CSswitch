@@ -211,6 +211,31 @@ def normalize_custom_url(url, mode):
     return urllib.parse.urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
 
 
+def configure_custom_models(prov, user_map=None, custom_model=""):
+    """Apply user mappings without letting built-in placeholder models catch aliases.
+
+    Science uses ``claude-sonnet-5`` internally although the selector currently
+    exposes ``claude-sonnet-4-6``.  For a custom provider those two names must use
+    the same user-selected Sonnet target unless the user explicitly maps both.
+    """
+    configured = dict(prov)
+    model_map = dict(configured.get("model_map", {}))
+    user_map = user_map if isinstance(user_map, dict) else {}
+    model_map.update(user_map)
+
+    if custom_model:
+        configured["default_model"] = custom_model
+        model_map[custom_model] = custom_model
+
+    if "claude-sonnet-5" not in user_map:
+        fallback = user_map.get("claude-sonnet-4-6") or custom_model
+        if fallback:
+            model_map["claude-sonnet-5"] = fallback
+
+    configured["model_map"] = model_map
+    return configured
+
+
 def resolve_model(name):
     """把 Science 传来的模型名解析成当前 provider 的目标模型。
     优先：选择器里选中的 provider 原生名 > 显式映射 > 去日期后缀 > 前缀匹配 > 默认。"""
@@ -751,30 +776,18 @@ if __name__ == "__main__":
                     PROV["models"] = [(m["id"], m.get("name", m["id"])) for m in custom_models]
             except json.JSONDecodeError:
                 pass
+        custom_model_map = {}
         custom_model_map_json = os.environ.get("CSSWITCH_CUSTOM_MODEL_MAP", "")
         if custom_model_map_json:
             try:
                 custom_model_map = json.loads(custom_model_map_json)
-                if isinstance(custom_model_map, dict):
-                    PROV = dict(PROV)
-                    # 合并：用户配置覆盖默认，未覆盖的保留默认
-                    merged_map = dict(PROV.get("model_map", {}))
-                    merged_map.update(custom_model_map)
-                    PROV["model_map"] = merged_map
+                if not isinstance(custom_model_map, dict):
+                    custom_model_map = {}
             except json.JSONDecodeError:
-                pass
+                custom_model_map = {}
         # 从环境变量读取单个自定义模型名（覆盖默认模型）
         custom_model = os.environ.get("CSSWITCH_CUSTOM_MODEL", "")
-        if custom_model:
-            PROV = dict(PROV)
-            PROV["default_model"] = custom_model
-            # 同时添加 model_map 映射，让 resolve_model 能正确解析
-            if PROV_NAME == "custom_anthropic":
-                PROV["model_map"] = dict(PROV.get("model_map", {}))
-                PROV["model_map"][custom_model] = custom_model
-            elif PROV_NAME == "custom_openai":
-                PROV["model_map"] = dict(PROV.get("model_map", {}))
-                PROV["model_map"][custom_model] = custom_model
+        PROV = configure_custom_models(PROV, custom_model_map, custom_model)
     if _up:
         PROV = dict(PROV)
         PROV["url"] = _up

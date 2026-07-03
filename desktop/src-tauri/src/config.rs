@@ -283,6 +283,7 @@ mod tests {
             ProviderCfg {
                 key: "sk-abcdef1234".into(),
                 url: String::new(),
+                ..Default::default()
             },
         );
         save_to(&d, &cfg).unwrap();
@@ -387,6 +388,7 @@ mod tests {
                 ProviderCfg {
                     key: "k-xyz".into(),
                     url: String::new(),
+                    ..Default::default()
                 },
             );
         })

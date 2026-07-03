@@ -86,5 +86,28 @@ class CustomUrlNormalization(unittest.TestCase):
                          "https://example.com/v1/chat/completions")
 
 
+class CustomModelConfiguration(unittest.TestCase):
+    def test_hidden_sonnet_5_alias_uses_visible_sonnet_mapping(self):
+        out = cs.configure_custom_models(
+            cs.PROVIDERS["custom_anthropic"],
+            {"claude-sonnet-4-6": "kimi/kimi-latest"},
+            "kimi/kimi-latest",
+        )
+        self.assertEqual(out["model_map"]["claude-sonnet-5"], "kimi/kimi-latest")
+
+    def test_explicit_sonnet_5_mapping_wins(self):
+        out = cs.configure_custom_models(
+            cs.PROVIDERS["custom_anthropic"],
+            {"claude-sonnet-4-6": "visible", "claude-sonnet-5": "explicit"},
+            "fallback",
+        )
+        self.assertEqual(out["model_map"]["claude-sonnet-5"], "explicit")
+
+    def test_builtin_provider_table_is_not_mutated(self):
+        original = cs.PROVIDERS["custom_anthropic"]["model_map"]["claude-sonnet-5"]
+        cs.configure_custom_models(cs.PROVIDERS["custom_anthropic"], {}, "fallback")
+        self.assertEqual(cs.PROVIDERS["custom_anthropic"]["model_map"]["claude-sonnet-5"], original)
+
+
 if __name__ == "__main__":
     unittest.main()
