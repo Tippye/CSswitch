@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
-  <img src="https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-1d1d1f.svg" alt="macOS">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-1d1d1f.svg" alt="Platform">
   <img src="https://img.shields.io/badge/built%20with-Tauri%202-C25A34.svg" alt="Tauri 2">
 </p>
 
@@ -12,7 +12,7 @@
 
 [Claude Science](https://claude.com) 是一套 **AI agent 原生的科研平台**：从查找、分析文献，到科研数据分析，再到图片与文章制作，全流程打通。
 
-CSSwitch 让你**无需 Claude 订阅**也能用上它：填入你自选的第三方 API（DeepSeek、通义千问，或任意 OpenAI 兼容端点）即可。Science 那套 AI agent 科研体验照旧，底层模型换成你自己的。类比 CC Switch 之于 Claude Code。
+CSSwitch 让你**无需 Claude 订阅**也能用上它：填入你自选的第三方 API（DeepSeek、通义千问，或任意 Anthropic/OpenAI 兼容端点）即可。Science 那套 AI agent 科研体验照旧，底层模型换成你自己的。类比 CC Switch 之于 Claude Code。
 
 ## 背景
 
@@ -24,15 +24,16 @@ Claude Science（沙箱 · 虚拟登录）
    ▼
 csswitch_proxy.py（本地翻译代理：剥离入站 Bearer、注入你的第三方 key）
    ▼
-DeepSeek 原生 Anthropic 端点  /  通义千问等 OpenAI 兼容端点
+DeepSeek 原生 Anthropic 端点  /  通义千问等 OpenAI 兼容端点  /  任意自定义端点
 ```
 
 ## 特性（安全 · 易用）
 
 **易用**
 
-- **开箱即用**：一个 macOS 桌面 app 把一切串好。你只需填入自己的第三方 API key，点「一键开始」，浏览器自动打开已登录的 Science。**零 node 运行时依赖**：虚拟登录已是 Rust 原生实现，装了就能用，不再要求本机有 node。
-- **自选模型**：DeepSeek、通义千问，或任意 OpenAI 兼容端点，面板里随时切换。
+- **开箱即用**：一个桌面 app 把一切串好。你只需填入自己的第三方 API key，点「一键开始」，浏览器自动打开已登录的 Science。**零 node 运行时依赖**：虚拟登录已是 Rust 原生实现，装了就能用，不再要求本机有 node。
+- **自选模型**：DeepSeek、通义千问，或任意 Anthropic/OpenAI 兼容端点，面板里随时切换。
+- **自定义API端点**：支持填入任意第三方 Anthropic 兼容或 OpenAI 兼容的 API 端点，不限于内置的 DeepSeek 和通义千问。详见下方「自定义API端点配置」。
 - **第三方 / 官方一键切换**：有 Claude 订阅、想走官方时，面板顶部切到「官方 Claude」即可干净交回你真实的 Science 与订阅（CSSwitch 不插手你的官方登录、也不起代理与沙箱）。
 - **原生保真**：DeepSeek 走原生 Anthropic 端点，thinking 与工具调用不失真。
 
@@ -46,15 +47,50 @@ DeepSeek 原生 Anthropic 端点  /  通义千问等 OpenAI 兼容端点
 
 **前置**：装好 [Claude Science](https://claude.com)，本机有 `python3`（虚拟登录已是 Rust 原生实现，**不再需要 node**）。
 
-1. 下载最新 [Release](../../releases/latest) 里的 `CSSwitch_*.dmg`，拖进「应用程序」。首次打开**右键 →「打开」**（未公证，属正常，见下）。
+1. 下载最新 [Release](../../releases/latest) 里对应平台的安装包：
+   - **macOS**: `CSSwitch_*_universal.dmg`
+   - **Linux**: `CSSwitch_*_amd64.AppImage` 或 `.deb`
 2. 打开 CSSwitch，弹出一个正常窗口（可拖动 / 缩放 / 最小化）。保持顶部「**第三方模型**」，选 provider，**粘贴你自己的第三方 API key**（只存本地 `~/.csswitch/config.json`，0600）。
 3. 点「**一键开始**」。它会自动起代理、写虚拟登录、起隔离沙箱、开浏览器打开已登录的 Science。完事，开始用。
 
 > 你唯一要提供的就是**你自己的第三方 API key**（你付费的 key，无法内置到 app 里）。其余全自动。
 >
-> **首次打开被 Gatekeeper 拦是正常的**：本 app 做了 ad-hoc 签名但未做 Apple 公证。右键 →「打开」，或到系统设置 → 隐私与安全性 →「仍要打开」。目前仅 arm64（Apple Silicon）。
+> **首次打开被 Gatekeeper 拦是正常的**：本 app 做了 ad-hoc 签名但未做 Apple 公证。右键 →「打开」，或到系统设置 → 隐私与安全性 →「仍要打开」。
 
-开发者的命令行用法（手动起代理与沙箱）、构建与测试，见 [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) 与 [`desktop/README.md`](./desktop/README.md)。
+### 自定义API端点配置
+
+除了内置的 DeepSeek 和通义千问，CSSwitch 还支持接入任意第三方 Anthropic 兼容或 OpenAI 兼容的 API 端点。
+
+配置步骤：
+1. 在面板「模型/Provider」中选择「自定义 Anthropic 兼容端点」或「自定义 OpenAI 兼容端点」
+2. 填写 API Endpoint URL（完整的 API 地址，如 `https://api.example.com/v1/messages`）
+3. 填写对应的 API Key
+4. 点击「保存」，然后「一键开始」
+
+**两种模式说明**：
+- **自定义 Anthropic 兼容端点**：透传模式。任何实现 Anthropic Messages API 的端点，CSSwitch 直接透传请求，保留 thinking、tool_use 等全部原生特性。适用场景：企业 AI 网关、第三方代理服务（如 [9router](https://github.com/decolua/9router)）、自托管模型（vLLM 等）。
+- **自定义 OpenAI 兼容端点**：翻译模式。任何实现 OpenAI Chat Completions API 的端点，CSSwitch 自动进行 Anthropic↔OpenAI 协议翻译，保留工具调用能力。适用场景：OpenAI 代理、自托管 OpenAI 兼容服务等。
+
+**注意事项**：
+- 请确保填入的 URL 是完整的 API endpoint 地址（含路径）
+- 自定义端点的模型名称会自动映射到 Claude 系列名称以兼容 Science 的模型选择面板
+- 工具调用 (tools) 的支持取决于上游端点是否实现对应功能
+
+## 平台支持
+
+| 平台 | 状态 | 打包格式 |
+|------|------|----------|
+| macOS | ✅ 完全支持 | .dmg (Universal/Apple Silicon) |
+| Linux | ✅ 支持 | AppImage, .deb |
+
+注意：Linux 版本支持完整的代理和虚拟登录功能。由于 Tauri 桌面框架限制，Linux 版的 UI 主题为系统原生风格。
+
+## 下载
+
+从 [GitHub Releases](https://github.com/Tippye/CSswitch/releases) 下载最新版本：
+
+- macOS: `CSSwitch_x.x.x_universal.dmg`
+- Linux: `CSSwitch_x.x.x_amd64.AppImage` 或 `CSSwitch_x.x.x_amd64.deb`
 
 ## 更新计划（Roadmap）
 
@@ -63,7 +99,6 @@ DeepSeek 原生 Anthropic 端点  /  通义千问等 OpenAI 兼容端点
 **更广泛的模型与 API 支持**
 
 - 内建更多第三方 provider：Kimi（Moonshot）、智谱 GLM、OpenRouter、本地 Ollama 等。
-- 面板内直接配置任意 OpenAI 兼容端点（自定义 `base_url`、模型名、鉴权头），无需改代码。
 - 每个 provider 的模型映射与选择器展示可在界面里编辑。
 
 **多学科的 Skill / MCP 支持**
@@ -79,12 +114,43 @@ DeepSeek 原生 Anthropic 端点  /  通义千问等 OpenAI 兼容端点
 - Intel（x86_64）与 universal 构建；可选的正式签名与 Apple 公证。
 - 面板增加日志查看、用量统计、更快的 provider 切换入口。
 
+## 构建
+
+### macOS
+
+```bash
+cd desktop
+npm install
+cargo tauri build --target universal-apple-darwin
+```
+
+### Linux
+
+需要安装 Tauri 依赖：
+
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+
+# 构建
+cd desktop
+npm install
+cargo tauri build --target x86_64-unknown-linux-gnu
+```
+
+产物在 `desktop/src-tauri/target/` 下的对应目录中。
+
+也提供了快捷脚本：
+- `scripts/build-macos.sh`
+- `scripts/build-linux.sh`
+
 ## 反馈与报错
 
 遇到问题或有想法，欢迎在 GitHub 提交（比私信更利于跟踪与复用）：
 
-- **报 bug**：[新建 Bug 反馈](https://github.com/SuperJJ007/CSswitch/issues/new?template=bug_report.yml)，或面板右下角「反馈 / 报 bug」直接跳转。
-- **提功能 / 想支持的 API**：[新建功能建议](https://github.com/SuperJJ007/CSswitch/issues/new?template=feature_request.yml)。
+- **报 bug**：[新建 Bug 反馈](https://github.com/Tippye/CSswitch/issues/new?template=bug_report.yml)，或面板右下角「反馈 / 报 bug」直接跳转。
+- **提功能 / 想支持的 API**：[新建功能建议](https://github.com/Tippye/CSswitch/issues/new?template=feature_request.yml)。
 - **附日志更快定位**：面板「日志」链接会打开 `~/.csswitch/logs/`（`proxy.log`、`sandbox.log`）。**贴之前务必先删掉任何 API key / 令牌。**
 
 隐私：本项目**不含任何自动遥测 / 崩溃上报**，不会在后台把你的数据发给任何人。所有反馈都由你手动提交、内容由你决定。
