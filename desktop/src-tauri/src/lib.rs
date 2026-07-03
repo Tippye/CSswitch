@@ -945,7 +945,7 @@ mod tests {
             "推理指向 http://127.0.0.1:18991/**** 尾巴"
         );
         assert_eq!(redact("原样返回", ""), "原样返回");
-        assert!(!redact("leak abcd1234 leak abcd1234", "abcd1234"contains("abcd1234"));
+        assert!(!redact("leak abcd1234 leak abcd1234", "abcd1234").contains("abcd1234"));
     }
 
     #[test]
