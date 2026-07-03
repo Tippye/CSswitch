@@ -567,7 +567,9 @@ class H(BaseHTTPRequestHandler):
         n_tools = len(body.get("tools") or [])
         log(f"POST /v1/messages  {src}->{target} stream={stream} tools={n_tools} "
             f"msgs={len(body.get('messages') or [])}  (入站鉴权已剥离, 直连 {PROV_NAME})")
-        headers = {"x-api-key": KEY, "content-type": "application/json", "anthropic-version": "2023-06-01"}
+        headers = {"content-type": "application/json", "anthropic-version": "2023-06-01"}
+        if KEY:
+            headers["x-api-key"] = KEY
         data = json.dumps(body).encode()
         headers_sent = False
         try:
@@ -630,7 +632,9 @@ class H(BaseHTTPRequestHandler):
         n_tools = len(oreq.get("tools", []))
         log(f"POST /v1/messages  {model_id}->{oreq['model']} stream={stream} tools={n_tools} "
             f"msgs={len(oreq['messages'])}  (入站鉴权已剥离, {PROV_NAME})")
-        headers = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json"}
+        if KEY:
+            headers["Authorization"] = f"Bearer {KEY}"
         data = json.dumps(oreq).encode()
         try:
             raw, _ct = http_post(PROV["url"], data, headers)
@@ -747,7 +751,7 @@ if __name__ == "__main__":
     if _up:
         PROV = dict(PROV)
         PROV["url"] = _up
-    if not KEY:
+    if not KEY and PROV_NAME not in ("custom_anthropic", "custom_openai"):
         print(f"找不到 {PROV['key_env']}。用环境变量或 --env-file <路径> 提供。", file=sys.stderr)
         sys.exit(1)
     log(f"CSSwitch 代理启动 127.0.0.1:{args.port}  provider={PROV_NAME}  "
