@@ -155,6 +155,10 @@ cargo tauri build --target x86_64-unknown-linux-gnu
 
 隐私：本项目**不含任何自动遥测 / 崩溃上报**，不会在后台把你的数据发给任何人。所有反馈都由你手动提交、内容由你决定。
 
+<p align="center">
+  <img src="docs/assets/wechat-group.jpg" alt="CSSwitch 微信群" width="420">
+</p>
+
 ## 风险与免责声明
 
 - 本项目仅供**个人学习与研究**用途，**使用者自负风险**。
