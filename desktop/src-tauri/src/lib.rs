@@ -49,14 +49,32 @@ fn key_fingerprint(s: &str) -> u64 {
 fn key_env(provider: &str) -> &'static str {
     match provider {
         "qwen" => "DASHSCOPE_API_KEY",
+        "custom_anthropic" => "CUSTOM_ANTHROPIC_API_KEY",
+        "custom_openai" => "CUSTOM_OPENAI_API_KEY",
         _ => "DEEPSEEK_API_KEY",
     }
 }
 
-fn upstream_host(provider: &str) -> &'static str {
+fn upstream_host(provider: &str) -> String {
+    let dir = config::default_dir();
+    let cfg = config::load_from(&dir).unwrap_or_default();
+    // 自定义provider：从配置的url中解析host
+    if provider == "custom_anthropic" || provider == "custom_openai" {
+        if let Some(url) = cfg.providers.get(provider).map(|p| p.url.clone()).filter(|u| !u.is_empty()) {
+            // 从URL解析host，如 https://api.example.com/path -> api.example.com
+            if let Some(host_start) = url.find("://") {
+                let rest = &url[host_start + 3..];
+                if let Some(slash_idx) = rest.find('/') {
+                    return rest[..slash_idx].to_string();
+                }
+                return rest.to_string();
+            }
+            return url;
+        }
+    }
     match provider {
-        "qwen" => "dashscope.aliyuncs.com",
-        _ => "api.deepseek.com",
+        "qwen" => "dashscope.aliyuncs.com".to_string(),
+        _ => "api.deepseek.com".to_string(),
     }
 }
 
@@ -267,8 +285,8 @@ fn ensure_proxy(
 
         let logf = open_log("proxy.log").map_err(|e| format!("建日志失败：{e}"))?;
         let logf2 = logf.try_clone().map_err(|e| e.to_string())?;
-        let child = Command::new(&py)
-            .arg(&script)
+        let mut cmd = Command::new(&py);
+        cmd.arg(&script)
             .arg("--provider")
             .arg(&provider)
             .arg("--port")
@@ -278,9 +296,16 @@ fn ensure_proxy(
             // key 经环境变量注入，绝不作为命令行参数（避免 ps 泄露）。
             .env(key_env(&provider), &key)
             .stdout(Stdio::from(logf))
-            .stderr(Stdio::from(logf2))
-            .spawn()
-            .map_err(|e| format!("启动代理失败：{e}"))?;
+            .stderr(Stdio::from(logf2));
+
+        // 自定义provider：注入URL
+        if provider == "custom_anthropic" || provider == "custom_openai" {
+            if let Some(url) = cfg.providers.get(&provider).map(|p| p.url.clone()).filter(|u| !u.is_empty()) {
+                cmd.env("CSSWITCH_CUSTOM_URL", url);
+            }
+        }
+
+        let child = cmd.spawn().map_err(|e| format!("启动代理失败：{e}"))?;
         st.proxy = Some(child);
         st.proxy_port = port;
         st.secret = secret.clone();
@@ -363,9 +388,12 @@ fn get_config() -> Result<serde_json::Value, String> {
     let dir = config::default_dir();
     let cfg = config::load_from(&dir).map_err(|e| e.to_string())?;
     let mut keys = serde_json::Map::new();
-    for p in ["deepseek", "qwen"] {
+    let mut urls = serde_json::Map::new();
+    for p in ["deepseek", "qwen", "custom_anthropic", "custom_openai"] {
         let masked = cfg.key_for(p).map(|k| config::mask(&k)).unwrap_or_default();
         keys.insert(p.to_string(), serde_json::Value::String(masked));
+        let url = cfg.providers.get(p).map(|pc| pc.url.clone()).unwrap_or_default();
+        urls.insert(p.to_string(), serde_json::Value::String(url));
     }
     Ok(json!({
         "provider": cfg.provider,
@@ -373,6 +401,7 @@ fn get_config() -> Result<serde_json::Value, String> {
         "sandbox_port": cfg.sandbox_port,
         "mode": cfg.mode,
         "keys": keys,
+        "urls": urls,
     }))
 }
 
@@ -452,15 +481,17 @@ struct UiSettings {
 
 #[tauri::command]
 fn set_config(cfg: UiSettings) -> Result<(), String> {
+    const SUPPORTED_PROVIDERS: &[&str] = &["deepseek", "qwen", "custom_anthropic", "custom_openai"];
     // 铁律防御：代理/沙箱端口都不许用真实实例保留端口 8765。
     if cfg.proxy_port == 8765 || cfg.sandbox_port == 8765 {
         return Err("端口 8765 是真实 Science 实例保留端口，不能用。".into());
     }
     // 只认已实现的 provider，避免存进未知值后起代理时才失败（修 P2-3）。
-    if cfg.provider != "deepseek" && cfg.provider != "qwen" {
+    if !SUPPORTED_PROVIDERS.contains(&cfg.provider.as_str()) {
         return Err(format!(
-            "未知 provider：{}（只支持 deepseek / qwen）。",
-            cfg.provider
+            "未知 provider：{}（只支持 {}）。",
+            cfg.provider,
+            SUPPORTED_PROVIDERS.join(" / ")
         ));
     }
     // 端口 0 非法（无法监听/探活）。
@@ -490,6 +521,16 @@ fn save_provider_key(provider: String, key: String) -> Result<String, String> {
     })
     .map_err(|e| e.to_string())?;
     Ok(config::mask(&key))
+}
+
+#[tauri::command]
+fn save_provider_url(provider: String, url: String) -> Result<(), String> {
+    let dir = config::default_dir();
+    config::update(&dir, move |c| {
+        c.providers.entry(provider).or_default().url = url;
+    })
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -760,7 +801,7 @@ fn status(state: State<'_, Mutex<AppState>>) -> serde_json::Value {
     } else {
         "amber"
     };
-    let upstream = if proc::tcp_reachable(upstream_host(&provider), 443, 500) {
+    let upstream = if proc::tcp_reachable(&upstream_host(&provider), 443, 500) {
         "green"
     } else {
         "amber"
@@ -853,6 +894,7 @@ pub fn run() {
             set_mode,
             open_official,
             save_provider_key,
+            save_provider_url,
             start_proxy,
             verify_key,
             stop_all,
@@ -903,7 +945,7 @@ mod tests {
             "推理指向 http://127.0.0.1:18991/**** 尾巴"
         );
         assert_eq!(redact("原样返回", ""), "原样返回");
-        assert!(!redact("leak abcd1234 leak abcd1234", "abcd1234").contains("abcd1234"));
+        assert!(!redact("leak abcd1234 leak abcd1234", "abcd1234"contains("abcd1234"));
     }
 
     #[test]
