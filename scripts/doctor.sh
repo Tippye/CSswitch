@@ -34,12 +34,14 @@ if [ -x "$SCIENCE_BIN" ]; then pass "找到 $SCIENCE_BIN"; else warn "未找到 
 
 echo "[Provider Key]"
 case "$PROVIDER" in
-  deepseek) KEY_ENV="DEEPSEEK_API_KEY"; KEY_VAL="${DEEPSEEK_API_KEY:-}";;
-  qwen)     KEY_ENV="DASHSCOPE_API_KEY"; KEY_VAL="${DASHSCOPE_API_KEY:-}";;
-  *)        KEY_ENV=""; KEY_VAL="";;
+  deepseek)         KEY_ENV="DEEPSEEK_API_KEY"; KEY_VAL="${DEEPSEEK_API_KEY:-}";;
+  qwen)             KEY_ENV="DASHSCOPE_API_KEY"; KEY_VAL="${DASHSCOPE_API_KEY:-}";;
+  custom_anthropic) KEY_ENV="CUSTOM_ANTHROPIC_API_KEY"; KEY_VAL="${CUSTOM_ANTHROPIC_API_KEY:-}";;
+  custom_openai)    KEY_ENV="CUSTOM_OPENAI_API_KEY"; KEY_VAL="${CUSTOM_OPENAI_API_KEY:-}";;
+  *)                KEY_ENV=""; KEY_VAL="";;
 esac
 if [ -z "$KEY_ENV" ]; then
-  fail "未知 provider：${PROVIDER}（应为 deepseek 或 qwen）"
+  fail "未知 provider：${PROVIDER}（应为 deepseek / qwen / custom_anthropic / custom_openai）"
 elif [ -n "$KEY_VAL" ]; then
   pass "$KEY_ENV 已设置（值不显示）"
 else
