@@ -32,6 +32,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # ---------- provider 注册表 ----------
@@ -189,6 +190,27 @@ def load_key(prov, args):
     return None
 
 
+def normalize_custom_url(url, mode):
+    """Accept either a provider base URL or an explicit API endpoint.
+
+    The desktop UI historically described this as an endpoint, but users naturally
+    enter provider roots such as ``https://api.example.com``. Posting an Anthropic
+    request to that root can return a branded HTML 200, which used to be logged as a
+    successful stream even though Science could not parse it and retried forever.
+    """
+    url = (url or "").strip()
+    parts = urllib.parse.urlsplit(url)
+    path = parts.path.rstrip("/")
+    suffix = "/v1/messages" if mode == "anthropic" else "/v1/chat/completions"
+    if not path:
+        path = suffix
+    elif path == "/v1":
+        path += suffix[3:]
+    elif mode == "anthropic" and path.endswith("/anthropic"):
+        path += suffix
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
+
+
 def resolve_model(name):
     """把 Science 传来的模型名解析成当前 provider 的目标模型。
     优先：选择器里选中的 provider 原生名 > 显式映射 > 去日期后缀 > 前缀匹配 > 默认。"""
@@ -248,7 +270,12 @@ def open_stream(url, data, headers, attempts=4, timeout=300):
             if not first:
                 r.close()
                 raise ConnectionError("上游 200 但立刻空体")
-            return r, first, r.headers.get("Content-Type", "application/json")
+            content_type = r.headers.get("Content-Type", "")
+            if "text/event-stream" not in content_type.lower():
+                r.close()
+                raise ConnectionError(
+                    f"上游流式响应不是 SSE（Content-Type={content_type or '缺失'}）；请检查 API 端点路径")
+            return r, first, content_type
         except urllib.error.HTTPError:
             raise
         except Exception as e:
@@ -713,7 +740,7 @@ if __name__ == "__main__":
             sys.exit(1)
         if custom_url:
             PROV = dict(PROV)
-            PROV["url"] = custom_url
+            PROV["url"] = normalize_custom_url(custom_url, PROV["mode"])
         # 可选：从环境变量读取自定义模型配置
         custom_models_json = os.environ.get("CSSWITCH_CUSTOM_MODELS", "")
         if custom_models_json:

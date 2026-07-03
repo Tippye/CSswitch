@@ -66,5 +66,25 @@ class MaxTokensPerModel(unittest.TestCase):
         self.assertEqual(cs.clamp_max_tokens(100000, "qwen-max"), 8192)
 
 
+class CustomUrlNormalization(unittest.TestCase):
+    def test_anthropic_root_gets_messages_path(self):
+        self.assertEqual(cs.normalize_custom_url("https://api.vveai.com/", "anthropic"),
+                         "https://api.vveai.com/v1/messages")
+
+    def test_anthropic_v1_and_vendor_prefix(self):
+        self.assertEqual(cs.normalize_custom_url("https://example.com/v1", "anthropic"),
+                         "https://example.com/v1/messages")
+        self.assertEqual(cs.normalize_custom_url("https://example.com/anthropic/", "anthropic"),
+                         "https://example.com/anthropic/v1/messages")
+
+    def test_explicit_endpoint_is_preserved(self):
+        url = "https://example.com/custom/messages?region=cn"
+        self.assertEqual(cs.normalize_custom_url(url, "anthropic"), url)
+
+    def test_openai_root_gets_chat_completions_path(self):
+        self.assertEqual(cs.normalize_custom_url("https://example.com", "openai"),
+                         "https://example.com/v1/chat/completions")
+
+
 if __name__ == "__main__":
     unittest.main()
