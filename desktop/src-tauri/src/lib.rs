@@ -12,6 +12,7 @@ mod config;
 mod oauth_forge;
 mod proc;
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -298,13 +299,20 @@ fn ensure_proxy(
             .stdout(Stdio::from(logf))
             .stderr(Stdio::from(logf2));
 
-        // 自定义provider：注入URL
+        // 自定义provider：注入URL、模型和模型映射
         if provider == "custom_anthropic" || provider == "custom_openai" {
             if let Some(url) = cfg.providers.get(&provider).map(|p| p.url.clone()).filter(|u| !u.is_empty()) {
                 cmd.env("CSSWITCH_CUSTOM_URL", url);
             }
             if let Some(model) = cfg.providers.get(&provider).map(|p| p.model.clone()).filter(|m| !m.is_empty()) {
                 cmd.env("CSSWITCH_CUSTOM_MODEL", model);
+            }
+            if let Some(model_map) = cfg.model_map_for(&provider) {
+                if !model_map.is_empty() {
+                    if let Ok(json_map) = serde_json::to_string(&model_map) {
+                        cmd.env("CSSWITCH_CUSTOM_MODEL_MAP", json_map);
+                    }
+                }
             }
         }
 
@@ -393,6 +401,7 @@ fn get_config() -> Result<serde_json::Value, String> {
     let mut keys = serde_json::Map::new();
     let mut urls = serde_json::Map::new();
     let mut models = serde_json::Map::new();
+    let mut model_maps = serde_json::Map::new();
     for p in ["deepseek", "qwen", "custom_anthropic", "custom_openai"] {
         let masked = cfg.key_for(p).map(|k| config::mask(&k)).unwrap_or_default();
         keys.insert(p.to_string(), serde_json::Value::String(masked));
@@ -400,6 +409,10 @@ fn get_config() -> Result<serde_json::Value, String> {
         urls.insert(p.to_string(), serde_json::Value::String(url));
         let model = cfg.providers.get(p).map(|pc| pc.model.clone()).unwrap_or_default();
         models.insert(p.to_string(), serde_json::Value::String(model));
+        let model_map = cfg.providers.get(p).map(|pc| {
+            serde_json::Value::Object(pc.model_map.iter().map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone()))).collect())
+        }).unwrap_or_default();
+        model_maps.insert(p.to_string(), model_map);
     }
     Ok(json!({
         "provider": cfg.provider,
@@ -409,6 +422,7 @@ fn get_config() -> Result<serde_json::Value, String> {
         "keys": keys,
         "urls": urls,
         "models": models,
+        "model_maps": model_maps,
     }))
 }
 
@@ -545,6 +559,22 @@ fn save_provider_model(provider: String, model: String) -> Result<(), String> {
     let dir = config::default_dir();
     config::update(&dir, move |c| {
         c.providers.entry(provider).or_default().model = model;
+    })
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn save_provider_model_map(provider: String, model_map: serde_json::Value) -> Result<(), String> {
+    let dir = config::default_dir();
+    let map: BTreeMap<String, String> = match model_map {
+        serde_json::Value::Object(obj) => obj.into_iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| (k, s.to_string())))
+            .collect(),
+        _ => BTreeMap::new(),
+    };
+    config::update(&dir, move |c| {
+        c.providers.entry(provider).or_default().model_map = map;
     })
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -913,6 +943,7 @@ pub fn run() {
             save_provider_key,
             save_provider_url,
             save_provider_model,
+            save_provider_model_map,
             start_proxy,
             verify_key,
             stop_all,

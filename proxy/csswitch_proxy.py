@@ -726,7 +726,10 @@ if __name__ == "__main__":
                 custom_model_map = json.loads(custom_model_map_json)
                 if isinstance(custom_model_map, dict):
                     PROV = dict(PROV)
-                    PROV["model_map"] = custom_model_map
+                    # 合并：用户配置覆盖默认，未覆盖的保留默认
+                    merged_map = dict(PROV.get("model_map", {}))
+                    merged_map.update(custom_model_map)
+                    PROV["model_map"] = merged_map
             except json.JSONDecodeError:
                 pass
         # 从环境变量读取单个自定义模型名（覆盖默认模型）

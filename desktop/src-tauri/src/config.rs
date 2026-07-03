@@ -39,6 +39,8 @@ pub struct ProviderCfg {
     pub url: String,   // 自定义 API endpoint URL
     #[serde(default)]
     pub model: String, // 自定义模型名称（覆盖默认）
+    #[serde(default)]
+    pub model_map: BTreeMap<String, String>, // 模型映射：前端模型名 -> 真实模型名
 }
 
 /// 顶层配置。字段都有默认值，缺字段的旧文件也能读。
@@ -96,6 +98,13 @@ impl Config {
         self.providers
             .get(provider)
             .map(|p| p.model.clone())
+            .filter(|m| !m.is_empty())
+    }
+    /// 取某 provider 的自定义模型映射。
+    pub fn model_map_for(&self, provider: &str) -> Option<BTreeMap<String, String>> {
+        self.providers
+            .get(provider)
+            .map(|p| p.model_map.clone())
             .filter(|m| !m.is_empty())
     }
 }

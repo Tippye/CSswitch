@@ -82,7 +82,8 @@ async function loadConfig() {
     window._keys = cfg.keys || {};
     window._urls = cfg.urls || {};
     window._models = cfg.models || {};
-    // 恢复自定义URL和模型名
+    window._modelMaps = cfg.model_maps || {};
+    // 恢复自定义URL和模型映射
     const isCustom = els.provider.value.startsWith("custom_");
     if (isCustom && els.customUrl) {
       els.customConfig.style.display = "block";
@@ -90,9 +91,12 @@ async function loadConfig() {
     } else if (els.customConfig) {
       els.customConfig.style.display = "none";
     }
-    if (isCustom && els.modelInput) {
+    if (isCustom && els.modelOpus) {
       els.modelConfig.style.display = "block";
-      els.modelInput.value = window._models[els.provider.value] || "";
+      const map = window._modelMaps[els.provider.value] || {};
+      els.modelOpus.value = map["claude-opus-4-8"] || "";
+      els.modelSonnet.value = map["claude-sonnet-4-6"] || "";
+      els.modelHaiku.value = map["claude-haiku-4-5"] || "";
     } else if (els.modelConfig) {
       els.modelConfig.style.display = "none";
     }
@@ -179,7 +183,7 @@ function currentSettings() {
 // 不再吞掉错误后拿旧配置继续、还误报成功（修 P1-4）。
 async function persistSettings() {
   await call("set_config", { cfg: currentSettings() });
-  // 如果是自定义provider，同时保存URL和模型名
+  // 如果是自定义provider，同时保存URL和模型映射
   const p = els.provider.value;
   if (p.startsWith("custom_") && els.customUrl) {
     const url = els.customUrl.value.trim();
@@ -187,9 +191,12 @@ async function persistSettings() {
       await call("save_provider_url", { provider: p, url });
     }
   }
-  if (p.startsWith("custom_") && els.modelInput) {
-    const model = els.modelInput.value.trim();
-    await call("save_provider_model", { provider: p, model });
+  if (p.startsWith("custom_") && els.modelOpus) {
+    const modelMap = {};
+    if (els.modelOpus.value.trim()) modelMap["claude-opus-4-8"] = els.modelOpus.value.trim();
+    if (els.modelSonnet.value.trim()) modelMap["claude-sonnet-4-6"] = els.modelSonnet.value.trim();
+    if (els.modelHaiku.value.trim()) modelMap["claude-haiku-4-5"] = els.modelHaiku.value.trim();
+    await call("save_provider_model_map", { provider: p, modelMap });
   }
 }
 
@@ -208,7 +215,7 @@ async function saveKey() {
     setMsg("请先粘贴 key。", "err");
     return;
   }
-  // 自定义provider：先保存URL和模型名
+  // 自定义provider：先保存URL和模型映射
   const p = els.provider.value;
   if (p.startsWith("custom_") && els.customUrl) {
     const url = els.customUrl.value.trim();
@@ -223,12 +230,15 @@ async function saveKey() {
       return;
     }
   }
-  if (p.startsWith("custom_") && els.modelInput) {
+  if (p.startsWith("custom_") && els.modelOpus) {
     try {
-      const model = els.modelInput.value.trim();
-      await call("save_provider_model", { provider: p, model });
+      const modelMap = {};
+      if (els.modelOpus.value.trim()) modelMap["claude-opus-4-8"] = els.modelOpus.value.trim();
+      if (els.modelSonnet.value.trim()) modelMap["claude-sonnet-4-6"] = els.modelSonnet.value.trim();
+      if (els.modelHaiku.value.trim()) modelMap["claude-haiku-4-5"] = els.modelHaiku.value.trim();
+      await call("save_provider_model_map", { provider: p, modelMap });
     } catch (e) {
-      setMsg("保存模型名失败：" + e, "err");
+      setMsg("保存模型映射失败：" + e, "err");
       return;
     }
   }
@@ -387,6 +397,10 @@ function wire() {
   els.customConfig = $("customConfig");
   els.customUrl = $("customUrl");
   els.modelConfig = $("modelConfig");
+  els.modelOpus = $("modelOpus");
+  els.modelSonnet = $("modelSonnet");
+  els.modelHaiku = $("modelHaiku");
+  els.modelConfig = $("modelConfig");
   els.modelInput = $("modelInput");
 
   els.modeSeg.querySelectorAll(".seg-btn").forEach((b) =>
@@ -394,7 +408,7 @@ function wire() {
   );
 
   els.provider.addEventListener("change", async () => {
-    // 自定义provider显示/隐藏URL和模型输入
+    // 自定义provider显示/隐藏URL和模型映射输入
     const isCustom = els.provider.value.startsWith("custom_");
     if (els.customConfig) {
       els.customConfig.style.display = isCustom ? "block" : "none";
@@ -405,8 +419,11 @@ function wire() {
     if (els.modelConfig) {
       els.modelConfig.style.display = isCustom ? "block" : "none";
     }
-    if (isCustom && els.modelInput && window._models) {
-      els.modelInput.value = window._models[els.provider.value] || "";
+    if (isCustom && els.modelOpus && window._modelMaps) {
+      const map = window._modelMaps[els.provider.value] || {};
+      els.modelOpus.value = map["claude-opus-4-8"] || "";
+      els.modelSonnet.value = map["claude-sonnet-4-6"] || "";
+      els.modelHaiku.value = map["claude-haiku-4-5"] || "";
     }
     reflectProvider();
     await persistSettingsSafe();
