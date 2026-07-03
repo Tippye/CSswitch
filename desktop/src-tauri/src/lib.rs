@@ -303,6 +303,9 @@ fn ensure_proxy(
             if let Some(url) = cfg.providers.get(&provider).map(|p| p.url.clone()).filter(|u| !u.is_empty()) {
                 cmd.env("CSSWITCH_CUSTOM_URL", url);
             }
+            if let Some(model) = cfg.providers.get(&provider).map(|p| p.model.clone()).filter(|m| !m.is_empty()) {
+                cmd.env("CSSWITCH_CUSTOM_MODEL", model);
+            }
         }
 
         let child = cmd.spawn().map_err(|e| format!("启动代理失败：{e}"))?;
@@ -389,11 +392,14 @@ fn get_config() -> Result<serde_json::Value, String> {
     let cfg = config::load_from(&dir).map_err(|e| e.to_string())?;
     let mut keys = serde_json::Map::new();
     let mut urls = serde_json::Map::new();
+    let mut models = serde_json::Map::new();
     for p in ["deepseek", "qwen", "custom_anthropic", "custom_openai"] {
         let masked = cfg.key_for(p).map(|k| config::mask(&k)).unwrap_or_default();
         keys.insert(p.to_string(), serde_json::Value::String(masked));
         let url = cfg.providers.get(p).map(|pc| pc.url.clone()).unwrap_or_default();
         urls.insert(p.to_string(), serde_json::Value::String(url));
+        let model = cfg.providers.get(p).map(|pc| pc.model.clone()).unwrap_or_default();
+        models.insert(p.to_string(), serde_json::Value::String(model));
     }
     Ok(json!({
         "provider": cfg.provider,
@@ -402,6 +408,7 @@ fn get_config() -> Result<serde_json::Value, String> {
         "mode": cfg.mode,
         "keys": keys,
         "urls": urls,
+        "models": models,
     }))
 }
 
@@ -528,6 +535,16 @@ fn save_provider_url(provider: String, url: String) -> Result<(), String> {
     let dir = config::default_dir();
     config::update(&dir, move |c| {
         c.providers.entry(provider).or_default().url = url;
+    })
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn save_provider_model(provider: String, model: String) -> Result<(), String> {
+    let dir = config::default_dir();
+    config::update(&dir, move |c| {
+        c.providers.entry(provider).or_default().model = model;
     })
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -895,6 +912,7 @@ pub fn run() {
             open_official,
             save_provider_key,
             save_provider_url,
+            save_provider_model,
             start_proxy,
             verify_key,
             stop_all,

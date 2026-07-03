@@ -30,13 +30,15 @@ fn default_mode() -> String {
     "proxy".to_string()
 }
 
-/// 单个 provider 的配置。支持 key（明文存盘）和自定义 URL。
+/// 单个 provider 的配置。支持 key（明文存盘）、自定义 URL 和模型选择。
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct ProviderCfg {
     #[serde(default)]
     pub key: String,
     #[serde(default)]
     pub url: String,   // 自定义 API endpoint URL
+    #[serde(default)]
+    pub model: String, // 自定义模型名称（覆盖默认）
 }
 
 /// 顶层配置。字段都有默认值，缺字段的旧文件也能读。
@@ -88,6 +90,13 @@ impl Config {
             .get(provider)
             .map(|p| p.url.clone())
             .filter(|u| !u.is_empty())
+    }
+    /// 取某 provider 的自定义模型名。
+    pub fn model_for(&self, provider: &str) -> Option<String> {
+        self.providers
+            .get(provider)
+            .map(|p| p.model.clone())
+            .filter(|m| !m.is_empty())
     }
 }
 

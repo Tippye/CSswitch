@@ -81,13 +81,20 @@ async function loadConfig() {
     els.sandboxPort.value = cfg.sandbox_port ?? 8990;
     window._keys = cfg.keys || {};
     window._urls = cfg.urls || {};
-    // 恢复自定义URL
+    window._models = cfg.models || {};
+    // 恢复自定义URL和模型名
     const isCustom = els.provider.value.startsWith("custom_");
     if (isCustom && els.customUrl) {
       els.customConfig.style.display = "block";
       els.customUrl.value = window._urls[els.provider.value] || "";
     } else if (els.customConfig) {
       els.customConfig.style.display = "none";
+    }
+    if (isCustom && els.modelInput) {
+      els.modelConfig.style.display = "block";
+      els.modelInput.value = window._models[els.provider.value] || "";
+    } else if (els.modelConfig) {
+      els.modelConfig.style.display = "none";
     }
     reflectProvider();
     applyMode(cfg.mode === "official" ? "official" : "proxy");
@@ -172,13 +179,17 @@ function currentSettings() {
 // 不再吞掉错误后拿旧配置继续、还误报成功（修 P1-4）。
 async function persistSettings() {
   await call("set_config", { cfg: currentSettings() });
-  // 如果是自定义provider，同时保存URL
+  // 如果是自定义provider，同时保存URL和模型名
   const p = els.provider.value;
   if (p.startsWith("custom_") && els.customUrl) {
     const url = els.customUrl.value.trim();
     if (url) {
       await call("save_provider_url", { provider: p, url });
     }
+  }
+  if (p.startsWith("custom_") && els.modelInput) {
+    const model = els.modelInput.value.trim();
+    await call("save_provider_model", { provider: p, model });
   }
 }
 
@@ -197,7 +208,7 @@ async function saveKey() {
     setMsg("请先粘贴 key。", "err");
     return;
   }
-  // 自定义provider：先保存URL
+  // 自定义provider：先保存URL和模型名
   const p = els.provider.value;
   if (p.startsWith("custom_") && els.customUrl) {
     const url = els.customUrl.value.trim();
@@ -209,6 +220,15 @@ async function saveKey() {
       await call("save_provider_url", { provider: p, url });
     } catch (e) {
       setMsg("保存 URL 失败：" + e, "err");
+      return;
+    }
+  }
+  if (p.startsWith("custom_") && els.modelInput) {
+    try {
+      const model = els.modelInput.value.trim();
+      await call("save_provider_model", { provider: p, model });
+    } catch (e) {
+      setMsg("保存模型名失败：" + e, "err");
       return;
     }
   }
@@ -366,19 +386,27 @@ function wire() {
   els.panel = document.querySelector(".panel");
   els.customConfig = $("customConfig");
   els.customUrl = $("customUrl");
+  els.modelConfig = $("modelConfig");
+  els.modelInput = $("modelInput");
 
   els.modeSeg.querySelectorAll(".seg-btn").forEach((b) =>
     b.addEventListener("click", () => switchMode(b.dataset.mode))
   );
 
   els.provider.addEventListener("change", async () => {
-    // 自定义provider显示/隐藏URL输入
+    // 自定义provider显示/隐藏URL和模型输入
     const isCustom = els.provider.value.startsWith("custom_");
     if (els.customConfig) {
       els.customConfig.style.display = isCustom ? "block" : "none";
     }
     if (isCustom && els.customUrl && window._urls) {
       els.customUrl.value = window._urls[els.provider.value] || "";
+    }
+    if (els.modelConfig) {
+      els.modelConfig.style.display = isCustom ? "block" : "none";
+    }
+    if (isCustom && els.modelInput && window._models) {
+      els.modelInput.value = window._models[els.provider.value] || "";
     }
     reflectProvider();
     await persistSettingsSafe();

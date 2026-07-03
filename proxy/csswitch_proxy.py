@@ -729,6 +729,18 @@ if __name__ == "__main__":
                     PROV["model_map"] = custom_model_map
             except json.JSONDecodeError:
                 pass
+        # 从环境变量读取单个自定义模型名（覆盖默认模型）
+        custom_model = os.environ.get("CSSWITCH_CUSTOM_MODEL", "")
+        if custom_model:
+            PROV = dict(PROV)
+            PROV["default_model"] = custom_model
+            # 同时添加 model_map 映射，让 resolve_model 能正确解析
+            if PROV_NAME == "custom_anthropic":
+                PROV["model_map"] = dict(PROV.get("model_map", {}))
+                PROV["model_map"][custom_model] = custom_model
+            elif PROV_NAME == "custom_openai":
+                PROV["model_map"] = dict(PROV.get("model_map", {}))
+                PROV["model_map"][custom_model] = custom_model
     if _up:
         PROV = dict(PROV)
         PROV["url"] = _up
