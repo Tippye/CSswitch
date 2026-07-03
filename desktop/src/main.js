@@ -11,7 +11,7 @@ const invoke = PREVIEW
 function mockInvoke(cmd, args) {
   switch (cmd) {
     case "get_config":
-      return Promise.resolve({ provider: "deepseek", proxy_port: 18991, sandbox_port: 8990, mode: "proxy", keys: { deepseek: "", qwen: "" } });
+      return Promise.resolve({ provider: "deepseek", proxy_port: 18991, sandbox_port: 8990, mode: "proxy", keys: { deepseek: "", qwen: "", custom_anthropic: "", custom_openai: "" }, urls: { deepseek: "", qwen: "", custom_anthropic: "", custom_openai: "" } });
     case "set_mode":
     case "open_official":
       return Promise.resolve(null);
@@ -19,6 +19,8 @@ function mockInvoke(cmd, args) {
       return Promise.resolve({ proxy: "amber", sandbox: "amber", upstream: "amber" });
     case "save_provider_key":
       return Promise.resolve("••••••••••" + String((args && args.key) || "").slice(-4));
+    case "save_provider_url":
+      return Promise.resolve(null);
     case "start_proxy":
       return Promise.resolve({ port: 18991 });
     case "verify_key":
@@ -44,7 +46,12 @@ let statusTimer = null;
 let busy = false;
 let mode = "proxy"; // "proxy" 第三方 | "official" 官方
 
-const KEY_LABELS = { deepseek: "DeepSeek API Key", qwen: "DashScope (通义千问) API Key" };
+const KEY_LABELS = {
+  deepseek: "DeepSeek API Key",
+  qwen: "DashScope (通义千问) API Key",
+  custom_anthropic: "Anthropic API Key",
+  custom_openai: "OpenAI API Key"
+};
 
 function setMsg(text, kind) {
   els.msg.textContent = text;
@@ -73,6 +80,15 @@ async function loadConfig() {
     els.proxyPort.value = cfg.proxy_port ?? 18991;
     els.sandboxPort.value = cfg.sandbox_port ?? 8990;
     window._keys = cfg.keys || {};
+    window._urls = cfg.urls || {};
+    // 恢复自定义URL
+    const isCustom = els.provider.value.startsWith("custom_");
+    if (isCustom && els.customUrl) {
+      els.customConfig.style.display = "block";
+      els.customUrl.value = window._urls[els.provider.value] || "";
+    } else if (els.customConfig) {
+      els.customConfig.style.display = "none";
+    }
     reflectProvider();
     applyMode(cfg.mode === "official" ? "official" : "proxy");
   } catch (e) {
@@ -156,6 +172,14 @@ function currentSettings() {
 // 不再吞掉错误后拿旧配置继续、还误报成功（修 P1-4）。
 async function persistSettings() {
   await call("set_config", { cfg: currentSettings() });
+  // 如果是自定义provider，同时保存URL
+  const p = els.provider.value;
+  if (p.startsWith("custom_") && els.customUrl) {
+    const url = els.customUrl.value.trim();
+    if (url) {
+      await call("save_provider_url", { provider: p, url });
+    }
+  }
 }
 
 // 独立 UI 事件（改 provider / 端口）用的兜底版：失败只提示、不抛，避免未捕获拒绝。
@@ -172,6 +196,21 @@ async function saveKey() {
   if (!key) {
     setMsg("请先粘贴 key。", "err");
     return;
+  }
+  // 自定义provider：先保存URL
+  const p = els.provider.value;
+  if (p.startsWith("custom_") && els.customUrl) {
+    const url = els.customUrl.value.trim();
+    if (!url) {
+      setMsg("请填写 API Endpoint URL。", "err");
+      return;
+    }
+    try {
+      await call("save_provider_url", { provider: p, url });
+    } catch (e) {
+      setMsg("保存 URL 失败：" + e, "err");
+      return;
+    }
   }
   setBusy(true);
   try {
@@ -226,6 +265,14 @@ async function oneClick() {
       window._keys[els.provider.value] = masked;
       els.keyInput.value = "";
       reflectProvider();
+    }
+    // 自定义provider：保存URL
+    const p = els.provider.value;
+    if (p.startsWith("custom_") && els.customUrl) {
+      const url = els.customUrl.value.trim();
+      if (url) {
+        await call("save_provider_url", { provider: p, url });
+      }
     }
     await persistSettings();
     const r = await call("one_click_login");
@@ -317,12 +364,22 @@ function wire() {
     "reportBtn", "logsBtn", "quitBtn", "modeSeg",
   ].forEach((id) => (els[id] = $(id)));
   els.panel = document.querySelector(".panel");
+  els.customConfig = $("customConfig");
+  els.customUrl = $("customUrl");
 
   els.modeSeg.querySelectorAll(".seg-btn").forEach((b) =>
     b.addEventListener("click", () => switchMode(b.dataset.mode))
   );
 
   els.provider.addEventListener("change", async () => {
+    // 自定义provider显示/隐藏URL输入
+    const isCustom = els.provider.value.startsWith("custom_");
+    if (els.customConfig) {
+      els.customConfig.style.display = isCustom ? "block" : "none";
+    }
+    if (isCustom && els.customUrl && window._urls) {
+      els.customUrl.value = window._urls[els.provider.value] || "";
+    }
     reflectProvider();
     await persistSettingsSafe();
   });
