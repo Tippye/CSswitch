@@ -30,7 +30,15 @@
         <select id="provider">
           <option value="deepseek">DeepSeek（原生 Anthropic 端点）</option>
           <option value="qwen">通义千问 Qwen（DashScope 翻译）</option>
+          <option value="custom_anthropic">自定义 Anthropic 兼容端点</option>
+          <option value="custom_openai">自定义 OpenAI 兼容端点</option>
         </select>
+      </div>
+
+      <div class="sec tp-only" id="customConfig" style="display:none;">
+        <label>API Endpoint URL</label>
+        <input id="customUrl" type="text" placeholder="https://api.example.com/v1/messages" autocomplete="off" spellcheck="false" />
+        <div class="hint">自定义API端点完整URL</div>
       </div>
 
       <div class="sec tp-only">
