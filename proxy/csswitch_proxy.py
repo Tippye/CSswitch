@@ -6,6 +6,8 @@ Providers:
                    代理只做「透传 + 改模型名 + 换鉴权头 + max_tokens 夹取 + 连接重试」，
                    thinking/tool_use 全部原生保真（不翻译协议）。
   qwen           ：DashScope compatible-mode —— Anthropic↔OpenAI 双向翻译（流式以 SSE 回放保真 tool_use）。
+  custom_anthropic : 任意 Anthropic 兼容端点 —— 透传模式（同 deepseek）。
+  custom_openai    : 任意 OpenAI 兼容端点 —— Anthropic↔OpenAI 翻译模式（同 qwen）。
 
 安全约束：
   - 入站 Authorization / x-api-key（Science 带来的 OAuth Bearer）一律剥离，不记录、不转发。
@@ -15,6 +17,10 @@ Providers:
 用法：
   DEEPSEEK_API_KEY=... python3 csswitch_proxy.py --provider deepseek --port 18991
   DASHSCOPE_API_KEY=... python3 csswitch_proxy.py --provider qwen --port 18991
+  CUSTOM_ANTHROPIC_API_KEY=... CSSWITCH_CUSTOM_URL=https://api.example.com/v1/messages \
+      python3 csswitch_proxy.py --provider custom_anthropic --port 18991
+  CUSTOM_OPENAI_API_KEY=... CSSWITCH_CUSTOM_URL=https://api.example.com/v1/chat/completions \
+      python3 csswitch_proxy.py --provider custom_openai --port 18991
 """
 import argparse
 import json
@@ -85,6 +91,50 @@ PROVIDERS = {
         },
         "default_cap": 8192,
         "default_model": "qwen-plus",
+    },
+    "custom_anthropic": {
+        "mode": "anthropic",
+        "url": "",  # 从 CSSWITCH_CUSTOM_URL 环境变量读取
+        "key_env": "CUSTOM_ANTHROPIC_API_KEY",
+        "models": [
+            ("claude-opus-4-8", "Custom Claude Opus"),
+            ("claude-sonnet-4-6", "Custom Claude Sonnet"),
+            ("claude-haiku-4-5", "Custom Claude Haiku"),
+        ],
+        "model_map": {
+            "claude-opus-4-8": "claude-3-opus-20240229",
+            "claude-sonnet-5": "claude-3-sonnet-20240229",
+            "claude-sonnet-4-6": "claude-3-sonnet-20240229",
+            "claude-haiku-4-5": "claude-3-haiku-20240307",
+        },
+        "model_caps": {
+            "claude-3-opus-20240229": 4096,
+            "claude-3-sonnet-20240229": 4096,
+            "claude-3-haiku-20240307": 4096,
+        },
+        "default_cap": 4096,
+        "default_model": "claude-3-sonnet-20240229",
+    },
+    "custom_openai": {
+        "mode": "openai",
+        "url": "",  # 从 CSSWITCH_CUSTOM_URL 环境变量读取
+        "key_env": "CUSTOM_OPENAI_API_KEY",
+        "models": [
+            ("claude-opus-4-8", "Custom GPT-4"),
+            ("claude-sonnet-4-6", "Custom GPT-3.5"),
+        ],
+        "model_map": {
+            "claude-opus-4-8": "gpt-4",
+            "claude-sonnet-5": "gpt-3.5-turbo",
+            "claude-sonnet-4-6": "gpt-3.5-turbo",
+            "claude-haiku-4-5": "gpt-3.5-turbo",
+        },
+        "model_caps": {
+            "gpt-4": 4096,
+            "gpt-3.5-turbo": 4096,
+        },
+        "default_cap": 4096,
+        "default_model": "gpt-3.5-turbo",
     },
 }
 
@@ -651,6 +701,34 @@ if __name__ == "__main__":
     KEY = load_key(PROV, args)
     AUTH_SECRET = os.environ.get("CSSWITCH_AUTH_TOKEN") or args.auth_token
     _up = os.environ.get("CSSWITCH_UPSTREAM_URL")
+    # 自定义provider：从环境变量读取URL、模型配置
+    if PROV_NAME in ("custom_anthropic", "custom_openai"):
+        custom_url = os.environ.get("CSSWITCH_CUSTOM_URL", "")
+        if not custom_url and not _up:
+            print(f"自定义provider {PROV_NAME} 需要设置 CSSWITCH_CUSTOM_URL 环境变量", file=sys.stderr)
+            sys.exit(1)
+        if custom_url:
+            PROV = dict(PROV)
+            PROV["url"] = custom_url
+        # 可选：从环境变量读取自定义模型配置
+        custom_models_json = os.environ.get("CSSWITCH_CUSTOM_MODELS", "")
+        if custom_models_json:
+            try:
+                custom_models = json.loads(custom_models_json)
+                if isinstance(custom_models, list):
+                    PROV = dict(PROV)
+                    PROV["models"] = [(m["id"], m.get("name", m["id"])) for m in custom_models]
+            except json.JSONDecodeError:
+                pass
+        custom_model_map_json = os.environ.get("CSSWITCH_CUSTOM_MODEL_MAP", "")
+        if custom_model_map_json:
+            try:
+                custom_model_map = json.loads(custom_model_map_json)
+                if isinstance(custom_model_map, dict):
+                    PROV = dict(PROV)
+                    PROV["model_map"] = custom_model_map
+            except json.JSONDecodeError:
+                pass
     if _up:
         PROV = dict(PROV)
         PROV["url"] = _up
